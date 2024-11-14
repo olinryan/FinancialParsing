@@ -46,7 +46,7 @@ def loadData():
         data['low']         = data['Low'].apply(lambda x: re.sub('\\$', '', x))
         data['volume']      = data['Volume']
         cols = ['close','open', 'high', 'low']  
-        data[cols].astype(float)
+        data[cols] = data[cols].astype(float)
         data.drop(['Date','Volume','Close/Last','Low','High','Open'], axis = 1, inplace = True)
         data.to_pickle(dataname)
 
@@ -64,6 +64,8 @@ def pullData():
         if f.endswith("_quote.pkl"):
             ticker = f.split('_')[0]
             datafile = os.path.join(cache,f)
+            localdata = pd.read_pickle(datafile)
+            lastEntry = localdata['timestamp'][0] + pd.tseries.offsets.Hour(4)
             print(f'Reading {ticker} from polygon ... ')
 
             aggs = []   # Aggregates frame
@@ -71,26 +73,25 @@ def pullData():
 
             # loop until successfully read
             while read:
-                try:
+                # try:
                     # pull most recent full buisness day from database
-                    for a in client.list_aggs(ticker=ticker, multiplier=1, timespan="day", from_=today - pd.tseries.offsets.BusinessDay(n=1)+pd.tseries.offsets.Hour(4), to=today, limit=1):
+                    for a in client.list_aggs(ticker=ticker, multiplier=1, timespan="day", from_=lastEntry, to=today, limit=1):
                         aggs.append(a)
                     read = False
-                except:
-                    print("Exceeded polygon requests, Waiting ...")
-                    time.sleep(60)  # polygon has a 5 request per minute cap
+                # except:
+                    # print("Exceeded polygon requests, Waiting ...")
+                    # time.sleep(65)  # polygon has a 5 request per minute cap
            
             aggs = pd.DataFrame(aggs)
             aggs['timestamp'] = pd.to_datetime(aggs['timestamp'],unit='ms')
             aggs['timestamp'] = aggs['timestamp'].dt.normalize()
             aggs.drop(['otc','transactions','vwap'], axis = 1, inplace = True)
-            # print(aggs)
-            localdata = pd.read_pickle(datafile)
+            print(aggs)
             # print(localdata)
-            if aggs['timestamp'] not in localdata['timestamp']:
+            if aggs['timestamp'][0] not in localdata['timestamp']:
                 mergeddata = pd.concat([aggs,localdata])
-            # print(mergeddata)
-            print(f"Saving to {datafile} ... ")
+                # print(mergeddata)
+                print(f"Saving to {datafile} ... ")
             
             mergeddata.to_pickle(datafile)
 
